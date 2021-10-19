@@ -2,6 +2,11 @@
 
 #include "Connection.hpp"
 #include "ColorTextureProgram.hpp"
+#include "LitColorTextureProgram.hpp"
+#include "Mesh.hpp"
+#include "Scene.hpp"
+#include "Sound.hpp"
+
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include <hb.h>
@@ -41,6 +46,7 @@ struct PlayMode : Mode {
 	ColorTextureProgram font_program;
 	FT_Face face; 
 	GLuint test_texture = -1;
+
 };
 
 // ----- helpful drawing functions ----- 

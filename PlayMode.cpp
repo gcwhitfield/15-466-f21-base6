@@ -9,6 +9,28 @@
 
 #include <random>
 
+// GLuint pie_meshes_for_lit_color_texture_program = 0;
+// Load< MeshBuffer > pie_meshes(LoadTagDefault, []() -> MeshBuffer const * {
+// 	MeshBuffer const *ret = new MeshBuffer(data_path("pie_scene.pnct"));
+// 	pie_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
+// 	return ret;
+// });
+// Load< Scene > pie_scene(LoadTagDefault, []() -> Scene const * {
+// 	return new Scene(data_path("pie_scene.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name) {
+// 		Mesh const &mesh = pie_meshes->lookup(mesh_name);
+
+// 		scene.drawables.emplace_back(transform);
+// 		Scene::Drawable &drawable = scene.drawables.back();
+
+// 		drawable.pipeline = lit_color_texture_program_pipeline;
+
+// 		drawable.pipeline.vao = pie_meshes_for_lit_color_texture_program;
+// 		drawable.pipeline.type = mesh.type;
+// 		drawable.pipeline.start = mesh.start;
+// 		drawable.pipeline.count = mesh.count;
+// 	});
+// });
+
 PlayMode::PlayMode(Client &client_) : client(client_) {
 
 	// { // font initialization
