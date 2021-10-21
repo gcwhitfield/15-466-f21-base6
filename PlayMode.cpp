@@ -6,6 +6,7 @@
 #include "hex_dump.hpp"
 
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 #include <random>
 
@@ -32,6 +33,9 @@
 // });
 
 PlayMode::PlayMode(Client &client_) : client(client_) {
+
+	// ----- init game state ------
+	player_pos = glm::vec2(0, 0);
 
 	// { // font initialization
 
@@ -197,17 +201,21 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 		} else if (evt.key.keysym.sym == SDLK_a) {
 			left.downs += 1;
 			left.pressed = true;
+			player_pos.x -= move_speed;
 			return true;
 		} else if (evt.key.keysym.sym == SDLK_d) {
 			right.downs += 1;
+			player_pos.x += move_speed;
 			right.pressed = true;
 			return true;
 		} else if (evt.key.keysym.sym == SDLK_w) {
 			up.downs += 1;
+			player_pos.y += move_speed;
 			up.pressed = true;
 			return true;
 		} else if (evt.key.keysym.sym == SDLK_s) {
 			down.downs += 1;
+			player_pos.y -= move_speed;
 			down.pressed = true;
 			return true;
 		}
@@ -241,6 +249,15 @@ void PlayMode::update(float elapsed) {
 		client.connections.back().send(right.downs);
 		client.connections.back().send(down.downs);
 		client.connections.back().send(up.downs);
+
+		// send player data to the server
+		std::vector<char>player_pos_data;
+		char* _player_pos_data = reinterpret_cast<char*>(&player_pos);
+		size_t n = sizeof(player_pos) / sizeof(char);
+		for (size_t i = 0; i < n; i++)
+		{
+			client.connections.back().send(_player_pos_data[i]);
+		}
 	}
 
 	//reset button press counters:
@@ -260,20 +277,48 @@ void PlayMode::update(float elapsed) {
 			std::cout << "[" << c->socket << "] recv'd data. Current buffer:\n" << hex_dump(c->recv_buffer); std::cout.flush();
 			//expecting message(s) like 'm' + 3-byte length + length bytes of text:
 			while (c->recv_buffer.size() >= 4) {
+				// step 1) interpret server message 
 				std::cout << "[" << c->socket << "] recv'd data. Current buffer:\n" << hex_dump(c->recv_buffer); std::cout.flush();
 				char type = c->recv_buffer[0];
 				if (type != 'm') {
 					throw std::runtime_error("Server sent unknown message type '" + std::to_string(type) + "'");
 				}
-				uint32_t size = (
+				uint32_t server_message_size = (
 					(uint32_t(c->recv_buffer[1]) << 16) | (uint32_t(c->recv_buffer[2]) << 8) | (uint32_t(c->recv_buffer[3]))
 				);
-				if (c->recv_buffer.size() < 4 + size) break; //if whole message isn't here, can't process
+				if (c->recv_buffer.size() < 4 + server_message_size) break; //if whole message isn't here, can't process
 				//whole message *is* here, so set current server message:
-				server_message = std::string(c->recv_buffer.begin() + 4, c->recv_buffer.begin() + 4 + size);
+				server_message = std::string(c->recv_buffer.begin() + 4, c->recv_buffer.begin() + 4 + server_message_size);
 
 				//and consume this part of the buffer:
-				c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + 4 + size);
+				c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + 4 + server_message_size);
+				// std::cout << c->recv_buffer[0] << std::endl;
+				// step 2) interpret data about other players
+				uint32_t other_players_data_size = (
+					(uint32_t(c->recv_buffer[0]) << 16) | (uint32_t(c->recv_buffer[1]) << 8) | (uint32_t(c->recv_buffer[2]))
+				);
+				uint8_t other_players_size = c->recv_buffer[3];
+				c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + 4);
+				size_t byte_count = 0; // counts the total number of bytes read in other_players_data
+				for (size_t i = 0; i < other_players_size; i++) {
+					glm::vec2* oplayer_position = reinterpret_cast<glm::vec2*>(&c->recv_buffer[0]);
+					byte_count += sizeof(glm::vec2);
+					uint8_t oplayer_namesize = c->recv_buffer[0 + sizeof(glm::vec2)];
+					std::string oplayer_name = std::string(c->recv_buffer.begin() + sizeof(glm::vec2), c->recv_buffer.begin() + sizeof(glm::vec2) + oplayer_namesize);
+					byte_count += oplayer_name.size();
+					assert(oplayer_name.size() == oplayer_namesize);
+					// if the other player is not in the other_players_data map, add them, and 
+					// then set their data
+					auto opd = other_players_data.find(oplayer_name);
+					if (opd == other_players_data.end()) {
+						other_players_data.insert(std::pair<std::string, OtherPlayersData>(oplayer_name, OtherPlayersData(*oplayer_position)));
+					} else {
+						opd->second.position = *oplayer_position;
+					}
+					c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + sizeof(glm::vec2) + oplayer_name.size());
+				}
+				assert(byte_count == other_players_data_size); // PARANOIA: the number of bytes read should equal the number of bytes
+				// that was specified in the message
 			}
 		}
 	}, 0.0);
@@ -309,6 +354,8 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		draw_text(glm::vec2(-aspect + 0.1f, 0.0f), server_message, 0.09f);
 
 		draw_text(glm::vec2(-aspect + 0.1f,-0.9f), "(press WASD to change your total)", 0.09f);
+
+		draw_text(player_pos, "PLAYER", 0.09f);
 	}
 
 	// { // Use freetype and harfbuzz to draw fancier text

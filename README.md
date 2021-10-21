@@ -1,8 +1,8 @@
-# (TODO: your game's title)
+# Pie Fight
 
-Author: (TODO: your name)
+Author: George Whitfield
 
-Design: (TODO: In two sentences or fewer, describe what is new and interesting about your game.)
+Design: Throw pies at your friends!
 
 Networking: (TODO: How does your game implement client/server multiplayer? What messages are transmitted? Where in the code?)
 

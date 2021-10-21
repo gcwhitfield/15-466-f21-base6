@@ -28,11 +28,20 @@ struct PlayMode : Mode {
 
 	//----- game state -----
 
+	struct OtherPlayersData {
+		OtherPlayersData(glm::vec2 p) : position(p) {};
+		glm::vec2 position;
+	};
+	std::map<std::string, OtherPlayersData> other_players_data;
+
 	//input tracking:
 	struct Button {
 		uint8_t downs = 0;
 		uint8_t pressed = 0;
 	} left, right, down, up;
+
+	glm::vec2 player_pos;
+	float move_speed = 0.01;
 
 	//last message from server:
 	std::string server_message;

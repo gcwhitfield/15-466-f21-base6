@@ -8,6 +8,7 @@
 #include <iostream>
 #include <cassert>
 #include <unordered_map>
+#include <glm/glm.hpp>
 
 #ifdef _WIN32
 extern "C" { uint32_t GetACP(); }
@@ -61,6 +62,8 @@ int main(int argc, char **argv) {
 
 		int32_t total = 0;
 
+		glm::vec2 position;
+
 	};
 	std::unordered_map< Connection *, PlayerInfo > players;
 
@@ -102,7 +105,8 @@ int main(int argc, char **argv) {
 
 					//handle messages from client:
 					//TODO: update for the sorts of messages your clients send
-					while (c->recv_buffer.size() >= 5) {
+					size_t message_size = 5 + sizeof(glm::vec2); // size in bytes
+					while (c->recv_buffer.size() >= message_size) {
 						//expecting five-byte messages 'b' (left count) (right count) (down count) (up count)
 						char type = c->recv_buffer[0];
 						if (type != 'b') {
@@ -115,13 +119,18 @@ int main(int argc, char **argv) {
 						uint8_t right_count = c->recv_buffer[2];
 						uint8_t down_count = c->recv_buffer[3];
 						uint8_t up_count = c->recv_buffer[4];
+						glm::vec2* player_pos = reinterpret_cast<glm::vec2 *>(&(c->recv_buffer[5]));
+						(void)player_pos;
+
+						std::cout << player.name << "'s position: " << player_pos->x << ", " << player_pos->y << std::endl;
 
 						player.left_presses += left_count;
 						player.right_presses += right_count;
 						player.down_presses += down_count;
 						player.up_presses += up_count;
+						player.position = *player_pos;
 
-						c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + 5);
+						c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + message_size);
 					}
 				}
 			}, remain);
@@ -155,6 +164,15 @@ int main(int argc, char **argv) {
 
 		//send updated game state to all clients
 		//TODO: update for your game state
+
+		// Each player in the game recieves a message from the server
+		// 
+		// [m] - 1 byte
+		// [status message size] - 3 bytes
+		// [status message] - number of bytes given by previous field
+		// [number of other players] - 1 byte
+		// [other PlayerData] - number of bytes can depend on each player
+
 		for (auto &[c, player] : players) {
 			(void)player; //work around "unused variable" warning on whatever g++ github actions uses
 			//send an update starting with 'm', a 24-bit size, and a blob of text:
@@ -163,10 +181,60 @@ int main(int argc, char **argv) {
 			c->send(uint8_t((status_message.size() >> 8) % 256));
 			c->send(uint8_t(status_message.size() % 256));
 			c->send_buffer.insert(c->send_buffer.end(), status_message.begin(), status_message.end());
+
+			struct PlayerMessageData { // the data that gets sent to all of the players
+				std::string name;
+				glm::vec2 position;
+
+				std::vector<char> getPackedData()
+				{
+					std::vector<char> result;
+					// add the position data
+					char* _player_pos_data = reinterpret_cast<char*>(&position);
+					size_t _pos_len = sizeof(position) / sizeof(char); // size in bytes of glm::vec2
+					for (size_t i = 0; i < _pos_len; i++)
+					{
+						result.emplace_back(_player_pos_data[i]);
+					}
+					// add the name data
+					uint8_t _name_len = name.size() + 1; // truncate the size of the name to 255 bytes. +1 is for the null terminator
+					result.emplace_back(reinterpret_cast<unsigned char>(_name_len));
+					result.insert(result.end(), name.begin(), name.end());
+					
+					return result;
+				}
+
+				size_t getPackedDataSize()
+				{
+					return sizeof(glm::vec2) + name.size() + 1;
+				}
+			};
+			// other players data begins with 1 byte, that tells the player how many 
+			// PlayerData is being sent 
+			std::vector<char> other_players_data;
+			uint8_t n = players.size() - 1;
+			(void)n;
+			for (auto &[oc, oplayer] : players) { // other connection, other player
+				if (oc == c) { // skip if we are visitng ourselves
+					continue;
+				}
+				PlayerMessageData pmd {oplayer.name, oplayer.position};
+				std::vector<char> player_data = pmd.getPackedData();
+				other_players_data.insert(other_players_data.end(), player_data.begin(), player_data.end());
+			}
+			std::cout << uint8_t(other_players_data.size() >> 16) << std::endl;
+
+			static_assert(sizeof(uint8_t(other_players_data.size() >> 16)) == 1, "Byte size in message is wrong!"); // static assert is checked at compile time
+			c->send(uint8_t(other_players_data.size() >> 16));
+			static_assert(sizeof(uint8_t((other_players_data.size() >> 8) % 256)) == 1, "Byte size in message is wrong!"); // static assert is checked at compile time
+			c->send(uint8_t((other_players_data.size() >> 8) % 256));
+			c->send(uint8_t(other_players_data.size() % 256));
+			c->send(uint8_t(n));
+			c->send_buffer.insert(c->send_buffer.end(), other_players_data.begin(), other_players_data.end());
+
 		}
 
 	}
-
 
 	return 0;
 
