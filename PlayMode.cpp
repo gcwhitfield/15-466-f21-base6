@@ -355,7 +355,12 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 
 		draw_text(glm::vec2(-aspect + 0.1f,-0.9f), "(press WASD to change your total)", 0.09f);
 
-		draw_text(player_pos, "PLAYER", 0.09f);
+		draw_text(player_pos, "ME!", 0.09f);
+
+		for (auto oplayer : other_players_data) {
+			draw_text(oplayer.second.position, oplayer.first, 0.09f);
+		}
+		
 	}
 
 	// { // Use freetype and harfbuzz to draw fancier text
