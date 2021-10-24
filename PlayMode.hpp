@@ -56,6 +56,17 @@ struct PlayMode : Mode {
 	FT_Face face; 
 	GLuint test_texture = -1;
 
+	// the Character struct and the characters map were inspired by the 
+	// OpenGL documentation about text rendering: 
+	// https://learnopengl.com/In-Practice/Text-Rendering
+	struct Character {
+		unsigned int TextureID;  // ID handle of the glyph texture
+		glm::ivec2   Size;       // Size of glyph
+		glm::ivec2   Bearing;    // Offset from baseline to left/top of glyph
+	};
+
+	std::map<char, Character> characters;
+	
 };
 
 // ----- helpful drawing functions ----- 
