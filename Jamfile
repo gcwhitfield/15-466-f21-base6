@@ -165,6 +165,7 @@ COMMON_NAMES =
 	Load
 	Connection
 	hex_dump
+	WalkMesh
 	;
 
 SHOW_MESHES_NAMES =

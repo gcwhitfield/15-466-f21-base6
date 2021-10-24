@@ -6,6 +6,7 @@
 #include "Mesh.hpp"
 #include "Scene.hpp"
 #include "Sound.hpp"
+#include "WalkMesh.hpp"
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -49,6 +50,16 @@ struct PlayMode : Mode {
 	//connection to server:
 	Client &client;
 
+	Scene scene;
+
+	struct Player {
+		WalkPoint at;
+		// transform is at player's feet and will be yawed by mouse left/right motion;
+		Scene::Transform *transform = nullptr;
+		// camera is at player's head and will be pitched by mouse up/down motion;
+		Scene::Camera *camera = nullptr;
+	} player;
+
 	// ----- font rendering -----
 	GLuint font_vertex_buffer = 0;
 	GLuint font_vertex_attributes = 0;
@@ -69,7 +80,7 @@ struct PlayMode : Mode {
 	
 };
 
-// ----- helpful drawing functions ----- 
+// ----- helpful drawing stuff ----- 
 // The vertex class was copied from the NEST framework
 // draw functions will work on vectors of vertices, defined as follows:
 struct Vertex {

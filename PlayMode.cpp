@@ -7,32 +7,66 @@
 
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #include <random>
 
-// GLuint pie_meshes_for_lit_color_texture_program = 0;
-// Load< MeshBuffer > pie_meshes(LoadTagDefault, []() -> MeshBuffer const * {
-// 	MeshBuffer const *ret = new MeshBuffer(data_path("pie_scene.pnct"));
-// 	pie_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
-// 	return ret;
-// });
-// Load< Scene > pie_scene(LoadTagDefault, []() -> Scene const * {
-// 	return new Scene(data_path("pie_scene.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name) {
-// 		Mesh const &mesh = pie_meshes->lookup(mesh_name);
+GLuint pie_meshes_for_lit_color_texture_program = 0;
+Load< MeshBuffer > pie_meshes(LoadTagDefault, []() -> MeshBuffer const * {
+	MeshBuffer const *ret = new MeshBuffer(data_path("phone-bank.pnct"));
+	pie_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
+	return ret;
+});
+Load< Scene > phonebank(LoadTagDefault, []() -> Scene const * {
+	return new Scene(data_path("phone-bank.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name) {
+		Mesh const &mesh = pie_meshes->lookup(mesh_name);
 
-// 		scene.drawables.emplace_back(transform);
-// 		Scene::Drawable &drawable = scene.drawables.back();
+		scene.drawables.emplace_back(transform);
+		Scene::Drawable &drawable = scene.drawables.back();
 
-// 		drawable.pipeline = lit_color_texture_program_pipeline;
+		drawable.pipeline = lit_color_texture_program_pipeline;
 
-// 		drawable.pipeline.vao = pie_meshes_for_lit_color_texture_program;
-// 		drawable.pipeline.type = mesh.type;
-// 		drawable.pipeline.start = mesh.start;
-// 		drawable.pipeline.count = mesh.count;
-// 	});
-// });
+		drawable.pipeline.vao = pie_meshes_for_lit_color_texture_program;
+		drawable.pipeline.type = mesh.type;
+		drawable.pipeline.start = mesh.start;
+		drawable.pipeline.count = mesh.count;
+	});
+});
 
-PlayMode::PlayMode(Client &client_) : client(client_) {
+WalkMesh const *walkmesh = nullptr;
+Load< WalkMeshes > phonebank_walkmeshes(LoadTagDefault, []() -> WalkMeshes const * {
+	WalkMeshes *ret = new WalkMeshes(data_path("phone-bank.w"));
+	walkmesh = &ret->lookup("WalkMesh");
+	return ret;
+});
+
+PlayMode::PlayMode(Client &client_) : client(client_), scene(*phonebank) {
+
+	{ // initialize the scene
+		scene.transforms.emplace_back(); // add player transform
+		player.transform = &scene.transforms.back();
+
+	 	// create a player camera attached to a child of the player transform
+		scene.transforms.emplace_back();
+		scene.cameras.emplace_back(&scene.transforms.back());
+		player.camera = &scene.cameras.back();
+		player.camera->fovy = glm::radians(60.0f);
+		player.camera->near = 0.01;
+		player.camera->transform->parent = player.transform;
+
+		// player's eyes are 1.8 units above the ground
+		player.camera->transform->position = glm::vec3(0.0f, 0.0f, 1.8f);
+
+		// rotate camera facing direction (-z) to player facing direction (+y)
+		player.camera->transform->position = glm::vec3(0.0f, 0.0f, 1.8f);
+
+		// start player walking at nearest walkpint
+		player.at = walkmesh->nearest_walk_point(player.transform->position);
+		player.transform->position = walkmesh->to_world_point(player.at);
+
+
+	}
+
 
 	// ----- init game state ------
 	player_pos = glm::vec2(0, 0);
@@ -203,7 +237,14 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 	if (evt.type == SDL_KEYDOWN) {
 		if (evt.key.repeat) {
 			//ignore repeats
-		} else if (evt.key.keysym.sym == SDLK_a) {
+		} 
+
+		// ------- 'unlock mouse when escape key is pressed' functionality copied from game 5 base code
+		else if (evt.key.keysym.sym == SDLK_ESCAPE) {
+			SDL_SetRelativeMouseMode(SDL_FALSE);
+		} 
+		
+		else if (evt.key.keysym.sym == SDLK_a) {
 			left.downs += 1;
 			left.pressed = true;
 			player_pos.x -= move_speed;
@@ -238,12 +279,112 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			down.pressed = false;
 			return true;
 		}
+
+	// ----- mouse input code copied from game 5 base code -----
+	} else if (evt.type == SDL_MOUSEBUTTONDOWN) {
+		if (SDL_GetRelativeMouseMode() == SDL_FALSE) {
+			SDL_SetRelativeMouseMode(SDL_TRUE);
+			return true;
+		}
+	} else if (evt.type == SDL_MOUSEMOTION) {
+		if (SDL_GetRelativeMouseMode() == SDL_TRUE) {
+			glm::vec2 motion = glm::vec2(
+				evt.motion.xrel / float(window_size.y),
+				-evt.motion.yrel / float(window_size.y)
+			);
+			glm::vec3 up = walkmesh->to_world_smooth_normal(player.at);
+			player.transform->rotation = glm::angleAxis(-motion.x * player.camera->fovy, up) * player.transform->rotation;
+			float pitch = glm::pitch(player.camera->transform->rotation);
+			pitch += motion.y * player.camera->fovy;
+			// camera looks down -z (basically at the player's feet) when pitch is at zero
+			pitch = std::min(pitch, 0.95f * float(M_PI));
+			pitch = std::max(pitch, 0.05f * float(M_PI));
+			player.camera->transform->rotation = glm::angleAxis(pitch, glm::vec3(1.0f, 0.0f, 0.0f));
+
+			return true;
+		}
 	}
 
 	return false;
 }
 
 void PlayMode::update(float elapsed) {
+
+	// ------ player walking code copied from game 5 base code -----
+	// player walking 
+	{
+		// combine inputs into a move;
+		constexpr float PlayerSpeed = 3.0f;
+		glm::vec2 move = glm::vec2(0.0f);
+		if (left.pressed && !right.pressed) move.x = -1.0f;
+		if (!left.pressed && right.pressed) move.x = 1.0f;
+		if (down.pressed & !up.pressed)     move.y = -1.0f;
+		if (!down.pressed && up.pressed)	move.y = 1.0f;
+
+		// make it so that moving diagonally doesn't go faster
+		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
+
+		// get move in world coordinate system
+		glm::vec3 remain = player.transform->make_local_to_world() * glm::vec4(move.x, move.y, 0.0f, 0.0f);
+
+		// using a for() instead of a while() here so that if walkpoint gets stuck i
+		// some awkward case, code will not infinite loop:
+		for (uint32_t iter = 0; iter < 10; ++iter) {
+			if (remain == glm::vec3(0.0f)) break;
+			WalkPoint end;
+			float time;
+			walkmesh->walk_in_triangle(player.at, remain, &end, &time);
+			player.at = end;
+			if (time == 1.0f) {
+				// finished walking within triangle
+				remain = glm::vec3(0.0f);
+				break;
+			}
+			// some step remains
+			remain *= (1.0f - time);
+			// try to step over an edge
+			glm::quat rotation;
+			if (walkmesh->cross_edge(player.at, &end, &rotation)) {
+				// stepped to a new triangle
+				player.at = end;
+				// rotate step to follow surface
+				remain = rotation * remain;
+			} else {
+				// ran into a wall, bounce / slide along the wall
+				glm::vec3 const &a = walkmesh->vertices[player.at.indices.x];
+				glm::vec3 const &b = walkmesh->vertices[player.at.indices.y];
+				glm::vec3 const &c = walkmesh->vertices[player.at.indices.z];
+				glm::vec3 along = glm::normalize(b-a);
+				glm::vec3 normal = glm::normalize(glm::cross(b-a, c-a));
+				glm::vec3 in = glm::cross(normal, along);
+
+				// check how much 'remain' is pointing out of th triangle
+				float d = glm::dot(remain, in);
+				if (d < 0.0f) {
+					// bounce off the wall
+					remain += (1.25f * d) * in;
+				} else {
+					// if it's just pointing along the edge, bend slightly away from wall:
+					remain += 0.01f * d * in;
+				}
+			}
+		}
+
+		if (remain != glm::vec3(0.0f)) {
+			std::cout << "NOTE: code used full iteration budget for walking! :(" << std::endl;
+		}
+
+		player.transform->position = walkmesh->to_world_point(player.at);
+		
+		{ // update player's rotation to respect local (smooth) up-vector:
+			glm::quat adjust = glm::rotation(
+				player.transform->rotation * glm::vec3(0.0f, 0.0f, 1.0f), // current up vector
+				walkmesh->to_world_smooth_normal(player.at) // smoothed up normal vector at walk location
+			);
+			player.transform->rotation = glm::normalize(adjust * player.transform->rotation);
+
+		}
+  	}
 
 	//queue data for sending to server:
 	//TODO: send something that makes sense for your game
@@ -332,6 +473,23 @@ void PlayMode::update(float elapsed) {
 void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
+
+	{ // draw the scene
+		glUseProgram(lit_color_texture_program->program);
+		glUniform1i(lit_color_texture_program->LIGHT_TYPE_int, 1);
+		glUniform3fv(lit_color_texture_program->LIGHT_DIRECTION_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f, -1.0f)));
+		glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0, 1.0, 0.95)));
+		glUseProgram(0);
+		glClearDepth(1.0f); // 1.0 is actuallt the default value to clear the depth buffer to, but FYI you can change it
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS); // this is the default depth compression function, but FYU you can change it
+
+		scene.draw(*player.camera);
+		
+		GL_ERRORS();
+	}
 
 	{ //use DrawLines to overlay some text:
 		glDisable(GL_DEPTH_TEST);
