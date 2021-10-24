@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
 
 		int32_t total = 0;
 
-		glm::vec2 position;
+		glm::vec3 position;
 
 	};
 	std::unordered_map< Connection *, PlayerInfo > players;
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
 
 					//handle messages from client:
 					//TODO: update for the sorts of messages your clients send
-					size_t message_size = 5 + sizeof(glm::vec2); // size in bytes
+					size_t message_size = 5 + sizeof(glm::vec3); // size in bytes
 					while (c->recv_buffer.size() >= message_size) {
 						//expecting five-byte messages 'b' (left count) (right count) (down count) (up count)
 						char type = c->recv_buffer[0];
@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
 						uint8_t right_count = c->recv_buffer[2];
 						uint8_t down_count = c->recv_buffer[3];
 						uint8_t up_count = c->recv_buffer[4];
-						glm::vec2* player_pos = reinterpret_cast<glm::vec2 *>(&(c->recv_buffer[5]));
+						glm::vec3* player_pos = reinterpret_cast<glm::vec3 *>(&(c->recv_buffer[5]));
 						(void)player_pos;
 
 						std::cout << player.name << "'s position: " << player_pos->x << ", " << player_pos->y << std::endl;
@@ -163,9 +163,7 @@ int main(int argc, char **argv) {
 		//std::cout << status_message << std::endl; //DEBUG
 
 		//send updated game state to all clients
-		//TODO: update for your game state
-
-		// Each player in the game recieves a message from the server
+		// Each player in the game receives a message from the server
 		// 
 		// [m] - 1 byte
 		// [status message size] - 3 bytes
@@ -184,14 +182,14 @@ int main(int argc, char **argv) {
 
 			struct PlayerMessageData { // the data that gets sent to all of the players
 				std::string name;
-				glm::vec2 position;
+				glm::vec3 position;
 
 				std::vector<char> getPackedData()
 				{
 					std::vector<char> result;
 					// add the position data
 					char* _player_pos_data = reinterpret_cast<char*>(&position);
-					size_t _pos_len = sizeof(position) / sizeof(char); // size in bytes of glm::vec2
+					size_t _pos_len = sizeof(glm::vec3) / sizeof(char); // size in bytes of glm::vec3
 					for (size_t i = 0; i < _pos_len; i++)
 					{
 						result.emplace_back(_player_pos_data[i]);
@@ -206,7 +204,7 @@ int main(int argc, char **argv) {
 
 				size_t getPackedDataSize()
 				{
-					return sizeof(glm::vec2) + name.size() + 1;
+					return sizeof(glm::vec3) + name.size() + 1;  // size of position + name.size() + 1
 				}
 			};
 			// other players data begins with 1 byte, that tells the player how many 
@@ -231,7 +229,6 @@ int main(int argc, char **argv) {
 			c->send(uint8_t(other_players_data.size() % 256));
 			c->send(uint8_t(n));
 			c->send_buffer.insert(c->send_buffer.end(), other_players_data.begin(), other_players_data.end());
-
 		}
 
 	}

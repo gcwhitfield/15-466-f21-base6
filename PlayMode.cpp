@@ -40,7 +40,7 @@ Load< WalkMeshes > phonebank_walkmeshes(LoadTagDefault, []() -> WalkMeshes const
 	return ret;
 });
 
-PlayMode::PlayMode(Client &client_) : client(client_), scene(*phonebank) {
+PlayMode::PlayMode(Client &client_) : scene(*phonebank), client(client_) { 
 
 	{ // initialize the scene
 		scene.transforms.emplace_back(); // add player transform
@@ -63,13 +63,18 @@ PlayMode::PlayMode(Client &client_) : client(client_), scene(*phonebank) {
 		// start player walking at nearest walkpint
 		player.at = walkmesh->nearest_walk_point(player.transform->position);
 		player.transform->position = walkmesh->to_world_point(player.at);
-
-
+	
+		// find the player base drawable, assign to variable
+		for (auto d : scene.drawables) {
+			if (d.transform->name == "Player") {
+				*other_player_base = d;
+			}
+		}
 	}
 
 
 	// ----- init game state ------
-	player_pos = glm::vec2(0, 0);
+	player_pos = glm::vec3(0, 0, 0);
 
 	{ // font initialization
 
@@ -447,10 +452,10 @@ void PlayMode::update(float elapsed) {
 				c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + 4);
 				size_t byte_count = 0; // counts the total number of bytes read in other_players_data
 				for (size_t i = 0; i < other_players_size; i++) {
-					glm::vec2* oplayer_position = reinterpret_cast<glm::vec2*>(&c->recv_buffer[0]);
-					byte_count += sizeof(glm::vec2);
-					uint8_t oplayer_namesize = c->recv_buffer[0 + sizeof(glm::vec2)];
-					std::string oplayer_name = std::string(c->recv_buffer.begin() + sizeof(glm::vec2), c->recv_buffer.begin() + sizeof(glm::vec2) + oplayer_namesize);
+					glm::vec3* oplayer_position = reinterpret_cast<glm::vec3*>(&c->recv_buffer[0]);
+					byte_count += sizeof(glm::vec3);
+					uint8_t oplayer_namesize = c->recv_buffer[0 + sizeof(glm::vec3)];
+					std::string oplayer_name = std::string(c->recv_buffer.begin() + sizeof(glm::vec3), c->recv_buffer.begin() + sizeof(glm::vec3) + oplayer_namesize);
 					byte_count += oplayer_name.size();
 					assert(oplayer_name.size() == oplayer_namesize);
 					// if the other player is not in the other_players_data map, add them, and 
@@ -458,10 +463,11 @@ void PlayMode::update(float elapsed) {
 					auto opd = other_players_data.find(oplayer_name);
 					if (opd == other_players_data.end()) {
 						other_players_data.insert(std::pair<std::string, OtherPlayersData>(oplayer_name, OtherPlayersData(*oplayer_position)));
+						scene.drawables.push_back(*other_player_base);
 					} else {
 						opd->second.position = *oplayer_position;
 					}
-					c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + sizeof(glm::vec2) + oplayer_name.size());
+					c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + sizeof(glm::vec3) + oplayer_name.size());
 				}
 				assert(byte_count == other_players_data_size); // PARANOIA: the number of bytes read should equal the number of bytes
 				// that was specified in the message

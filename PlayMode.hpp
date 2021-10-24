@@ -28,10 +28,9 @@ struct PlayMode : Mode {
 	virtual void draw(glm::uvec2 const &drawable_size) override;
 
 	//----- game state -----
-
 	struct OtherPlayersData {
-		OtherPlayersData(glm::vec2 p) : position(p) {};
-		glm::vec2 position;
+		OtherPlayersData(glm::vec3 p) : position(p) {};
+		glm::vec3 position;
 	};
 	std::map<std::string, OtherPlayersData> other_players_data;
 
@@ -41,17 +40,11 @@ struct PlayMode : Mode {
 		uint8_t pressed = 0;
 	} left, right, down, up;
 
-	glm::vec2 player_pos;
+	glm::vec3 player_pos;
 	float move_speed = 0.01;
-
-	//last message from server:
-	std::string server_message;
-
-	//connection to server:
-	Client &client;
-
+	
 	Scene scene;
-
+	
 	struct Player {
 		WalkPoint at;
 		// transform is at player's feet and will be yawed by mouse left/right motion;
@@ -59,6 +52,16 @@ struct PlayMode : Mode {
 		// camera is at player's head and will be pitched by mouse up/down motion;
 		Scene::Camera *camera = nullptr;
 	} player;
+	// ---------- 
+
+	// ----- networking -----
+	//last message from server:
+	std::string server_message;
+
+	//connection to server:
+	Client &client;
+	// ----------
+
 
 	// ----- font rendering -----
 	GLuint font_vertex_buffer = 0;
@@ -77,7 +80,11 @@ struct PlayMode : Mode {
 	};
 
 	std::map<char, Character> characters;
-	
+	// ----------
+
+	// ----- misc ----- 
+	Scene::Drawable *other_player_base; // base object from which to instantiate other players into the scene
+	// ----------
 };
 
 // ----- helpful drawing stuff ----- 
