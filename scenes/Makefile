@@ -17,15 +17,15 @@ EXPORT_SCENE=export-scene.py
 DIST=../dist
 
 all : \
-	$(DIST)/pie-fight.pnct \
-	$(DIST)/pie-fight.w \
-	$(DIST)/pie-fight.scene \
+	$(DIST)/twin-circles.pnct \
+	$(DIST)/twin-circles.w \
+	$(DIST)/twin-circles.scene \
 
-$(DIST)/pie-fight.pnct : pie-fight.blend $(EXPORT_MESHES)
+$(DIST)/twin-circles.pnct : twin-circles.blend $(EXPORT_MESHES)
 	$(BLENDER) --background --python $(EXPORT_MESHES) -- '$<':Platforms '$@'
 
-$(DIST)/pie-fight.scene : pie-fight.blend $(EXPORT_SCENE)
+$(DIST)/twin-circles.scene : twin-circles.blend $(EXPORT_SCENE)
 	$(BLENDER) --background --python $(EXPORT_SCENE) -- '$<':Platforms '$@'
 
-$(DIST)/pie-fight.w : pie-fight.blend $(EXPORT_WALKMESHES)
+$(DIST)/twin-circles.w : twin-circles.blend $(EXPORT_WALKMESHES)
 	$(BLENDER) --background --python $(EXPORT_WALKMESHES) -- '$<':WalkMeshes '$@'

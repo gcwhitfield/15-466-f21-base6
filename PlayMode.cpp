@@ -13,12 +13,12 @@
 
 GLuint pie_meshes_for_lit_color_texture_program = 0;
 Load< MeshBuffer > pie_meshes(LoadTagDefault, []() -> MeshBuffer const * {
-	MeshBuffer const *ret = new MeshBuffer(data_path("pie-fight.pnct"));
+	MeshBuffer const *ret = new MeshBuffer(data_path("twin-circles.pnct"));
 	pie_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
 	return ret;
 });
 Load< Scene > phonebank(LoadTagDefault, []() -> Scene const * {
-	return new Scene(data_path("pie-fight.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name) {
+	return new Scene(data_path("twin-circles.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name) {
 		Mesh const &mesh = pie_meshes->lookup(mesh_name);
 
 		scene.drawables.emplace_back(transform);
@@ -35,7 +35,7 @@ Load< Scene > phonebank(LoadTagDefault, []() -> Scene const * {
 
 WalkMesh const *walkmesh = nullptr;
 Load< WalkMeshes > phonebank_walkmeshes(LoadTagDefault, []() -> WalkMeshes const * {
-	WalkMeshes *ret = new WalkMeshes(data_path("pie-fight.w"));
+	WalkMeshes *ret = new WalkMeshes(data_path("twin-circles.w"));
 	walkmesh = &ret->lookup("WalkMesh");
 	return ret;
 });
@@ -541,6 +541,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		
 	}
 
+	/*
 	{ // Use freetype and harfbuzz to draw fancier text
 		 
 		// compute window aspect ratio
@@ -609,6 +610,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		glUseProgram(0);
 
 	}
+	*/
 
 	GL_ERRORS();
 }
