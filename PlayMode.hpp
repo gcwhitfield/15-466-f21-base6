@@ -30,7 +30,12 @@ struct PlayMode : Mode {
 	//----- game state -----
 	struct OtherPlayersData {
 		OtherPlayersData(glm::vec3 p) : position(p) {};
-		glm::vec3 position;
+
+		// ----- data received by the server -----
+		glm::vec3 position; // this position could be different from this->drawable->transform->position
+
+		// ----- data created by the client -----
+		Scene::Drawable* drawable;
 	};
 	std::map<std::string, OtherPlayersData> other_players_data;
 
@@ -83,7 +88,7 @@ struct PlayMode : Mode {
 	// ----------
 
 	// ----- misc ----- 
-	Scene::Drawable *other_player_base; // base object from which to instantiate other players into the scene
+	Scene::Drawable::Pipeline other_player_base; // base object from which to instantiate other players into the scene
 	// ----------
 };
 

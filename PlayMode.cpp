@@ -67,7 +67,7 @@ PlayMode::PlayMode(Client &client_) : scene(*phonebank), client(client_) {
 		// find the player base drawable, assign to variable
 		for (auto d : scene.drawables) {
 			if (d.transform->name == "Player") {
-				*other_player_base = d;
+				other_player_base = d.pipeline;
 			}
 		}
 	}
@@ -252,21 +252,17 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 		else if (evt.key.keysym.sym == SDLK_a) {
 			left.downs += 1;
 			left.pressed = true;
-			player_pos.x -= move_speed;
 			return true;
 		} else if (evt.key.keysym.sym == SDLK_d) {
 			right.downs += 1;
-			player_pos.x += move_speed;
 			right.pressed = true;
 			return true;
 		} else if (evt.key.keysym.sym == SDLK_w) {
 			up.downs += 1;
-			player_pos.y += move_speed;
 			up.pressed = true;
 			return true;
 		} else if (evt.key.keysym.sym == SDLK_s) {
 			down.downs += 1;
-			player_pos.y -= move_speed;
 			down.pressed = true;
 			return true;
 		}
@@ -401,6 +397,7 @@ void PlayMode::update(float elapsed) {
 		client.connections.back().send(down.downs);
 		client.connections.back().send(up.downs);
 
+		player_pos = player.transform->position;
 		// send player data to the server
 		std::vector<char>player_pos_data;
 		char* _player_pos_data = reinterpret_cast<char*>(&player_pos);
@@ -462,10 +459,22 @@ void PlayMode::update(float elapsed) {
 					// then set their data
 					auto opd = other_players_data.find(oplayer_name);
 					if (opd == other_players_data.end()) {
-						other_players_data.insert(std::pair<std::string, OtherPlayersData>(oplayer_name, OtherPlayersData(*oplayer_position)));
-						scene.drawables.push_back(*other_player_base);
+						scene.transforms.emplace_back();
+						Scene::Transform *other_player_transform = &scene.transforms.back();
+						other_player_transform->position = *oplayer_position;
+						scene.drawables.emplace_back(Scene::Drawable(other_player_transform));
+						Scene::Drawable *other_player = &scene.drawables.back();
+						other_player->pipeline = other_player_base;
+						OtherPlayersData oplayer_data = OtherPlayersData(*oplayer_position);
+						oplayer_data.drawable = other_player;
+						other_players_data.insert(std::pair<std::string, OtherPlayersData>(oplayer_name, oplayer_data));
+						std::cout << "Pushed other player base to scene.drawables" << std::endl;
+					
 					} else {
 						opd->second.position = *oplayer_position;
+						std::cout << opd->first << ": " << to_string(opd->second.position) << std::endl;
+						assert(opd->second.drawable);
+						opd->second.drawable->transform->position = *oplayer_position;
 					}
 					c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + sizeof(glm::vec3) + oplayer_name.size());
 				}
