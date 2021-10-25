@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
 
 
 	//------------ main loop ------------
-	constexpr float ServerTick = 1.0f / 10.0f; //TODO: set a server tick that makes sense for your game
+	constexpr float ServerTick = 1.0f / 30.0f; 
 
 	//server state:
 
