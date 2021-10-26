@@ -39,6 +39,7 @@ int main(int argc, char **argv) {
 	//------------ initialization ------------
 
 	Server server(argv[1]);
+	std::string status_message = "";
 
 
 	//------------ main loop ------------
@@ -55,10 +56,8 @@ int main(int argc, char **argv) {
 		}
 		std::string name;
 
-		uint32_t left_presses = 0;
-		uint32_t right_presses = 0;
-		uint32_t up_presses = 0;
-		uint32_t down_presses = 0;
+		uint32_t num_pies_collected = 0;
+		uint32_t flag = 0;
 
 		int32_t total = 0;
 
@@ -67,6 +66,7 @@ int main(int argc, char **argv) {
 	};
 	std::unordered_map< Connection *, PlayerInfo > players;
 
+	PlayerInfo *winner = NULL;
 	while (true) {
 		static auto next_tick = std::chrono::steady_clock::now() + std::chrono::duration< double >(ServerTick);
 		//process incoming data from clients until a tick has elapsed:
@@ -104,8 +104,7 @@ int main(int argc, char **argv) {
 					PlayerInfo &player = f->second;
 
 					//handle messages from client:
-					//TODO: update for the sorts of messages your clients send
-					size_t message_size = 5 + sizeof(glm::vec3); // size in bytes
+					size_t message_size = 3 + sizeof(glm::vec3); // size in bytes
 					while (c->recv_buffer.size() >= message_size) {
 						//expecting five-byte messages 'b' (left count) (right count) (down count) (up count)
 						char type = c->recv_buffer[0];
@@ -115,19 +114,15 @@ int main(int argc, char **argv) {
 							c->close();
 							return;
 						}
-						uint8_t left_count = c->recv_buffer[1];
-						uint8_t right_count = c->recv_buffer[2];
-						uint8_t down_count = c->recv_buffer[3];
-						uint8_t up_count = c->recv_buffer[4];
+						uint8_t num_pies_collected = c->recv_buffer[1];
+						uint8_t flag = c->recv_buffer[2];
+						if (flag == 1) {
+							winner = &player;
+						}
+
 						glm::vec3* player_pos = reinterpret_cast<glm::vec3 *>(&(c->recv_buffer[5]));
-						(void)player_pos;
 
-						std::cout << player.name << "'s position: " << player_pos->x << ", " << player_pos->y << std::endl;
-
-						player.left_presses += left_count;
-						player.right_presses += right_count;
-						player.down_presses += down_count;
-						player.up_presses += up_count;
+						player.num_pies_collected = num_pies_collected;
 						player.position = *player_pos;
 
 						c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + message_size);
@@ -137,29 +132,16 @@ int main(int argc, char **argv) {
 		}
 
 		//update current game state
-		//TODO: replace with *your* game state update
-		std::string status_message = "";
-		int32_t overall_sum = 0;
-		for (auto &[c, player] : players) {
-			(void)c; //work around "unused variable" warning on whatever version of g++ github actions is running
-			for (; player.left_presses > 0; --player.left_presses) {
-				player.total -= 1;
+		status_message = "";
+		if (winner) {
+			status_message = winner->name + " wins! ";
+		} else {
+			for (auto &[c, player] : players) {
+				(void)c; //work around "unused variable" warning on whatever version of g++ github actions is running
+				if (status_message != "") status_message += " + ";
+				status_message += "( " + player.name + ": " + std::to_string(player.num_pies_collected) + " ) ";
 			}
-			for (; player.right_presses > 0; --player.right_presses) {
-				player.total += 1;
-			}
-			for (; player.down_presses > 0; --player.down_presses) {
-				player.total -= 10;
-			}
-			for (; player.up_presses > 0; --player.up_presses) {
-				player.total += 10;
-			}
-			if (status_message != "") status_message += " + ";
-			status_message += std::to_string(player.total) + " (" + player.name + ")";
-
-			overall_sum += player.total;
 		}
-		status_message += " = " + std::to_string(overall_sum);
 		//std::cout << status_message << std::endl; //DEBUG
 
 		//send updated game state to all clients

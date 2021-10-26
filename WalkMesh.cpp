@@ -135,12 +135,13 @@ void WalkMesh::walk_in_triangle(WalkPoint const &start, glm::vec3 const &step, W
 	assert(step.y == step.y);
 	assert(step.z == step.z);
 
-	assert (start.weights.x <= 1);
-	assert (start.weights.y <= 1);
-	assert (start.weights.z <= 1);
-	assert (start.weights.x >= 0);
-	assert (start.weights.y >= 0);
-	assert (start.weights.z >= 0);
+	float eps = 0.01;
+	assert (start.weights.x <= 1 + eps);
+	assert (start.weights.y <= 1 + eps);
+	assert (start.weights.z <= 1 + eps);
+	assert (start.weights.x >= 0 - eps);
+	assert (start.weights.y >= 0 - eps);
+	assert (start.weights.z >= 0 - eps);
 
     glm::vec3 const &a = vertices[start.indices.x];
 	glm::vec3 const &b = vertices[start.indices.y];

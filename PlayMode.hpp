@@ -8,6 +8,7 @@
 #include "Sound.hpp"
 #include "WalkMesh.hpp"
 
+
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include <hb.h>
@@ -17,6 +18,8 @@
 
 #include <vector>
 #include <deque>
+#include <stdlib.h>
+#include <unordered_set>
 
 struct PlayMode : Mode {
 	PlayMode(Client &client);
@@ -39,6 +42,7 @@ struct PlayMode : Mode {
 	};
 	std::map<std::string, OtherPlayersData> other_players_data;
 
+	std::vector<Scene::Drawable> pies;
 	//input tracking:
 	struct Button {
 		uint8_t downs = 0;
@@ -57,6 +61,12 @@ struct PlayMode : Mode {
 		// camera is at player's head and will be pitched by mouse up/down motion;
 		Scene::Camera *camera = nullptr;
 	} player;
+
+	std::vector<Scene::Transform*> pie_spawn_locations;
+
+	size_t num_pies_collected = 0;
+	size_t num_pies_total = 0;
+	bool has_won = false;
 	// ---------- 
 
 	// ----- networking -----
@@ -89,6 +99,7 @@ struct PlayMode : Mode {
 
 	// ----- misc ----- 
 	Scene::Drawable::Pipeline other_player_base; // base object from which to instantiate other players into the scene
+	Scene::Drawable::Pipeline pie_base;
 	// ----------
 };
 

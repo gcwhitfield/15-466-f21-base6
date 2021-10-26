@@ -65,161 +65,24 @@ PlayMode::PlayMode(Client &client_) : scene(*phonebank), client(client_) {
 		player.transform->position = walkmesh->to_world_point(player.at);
 	
 		// find the player base drawable, assign to variable
+		// bool has_set_pie_base = false;
 		for (auto d : scene.drawables) {
 			if (d.transform->name == "Player") {
 				other_player_base = d.pipeline;
+			} else if (d.transform->name.find("PieSpawnPoint") < d.transform->name.size() - std::string("PieSpawnPoint").size()) {
+				pie_spawn_locations.push_back(d.transform);
+				pies.emplace_back(d);
 			}
 		}
+
+		num_pies_total = pies.size();
+		num_pies_collected = 0;
 	}
 
 
 	// ----- init game state ------
 	player_pos = glm::vec3(0, 0, 0);
 
-	{ // font initialization
-
-		{ // vertex array mapping buffer for font_program
-
-			// tell OpenGl to create a vertex buffer object
-			glGenBuffers(1, &font_vertex_buffer);
-
-			// tell OpenGL to create a vertex attributes array
-			glGenVertexArrays(1, &font_vertex_attributes);
-
-			// set font_vertex_attributes a the current vertex array object
-			glBindVertexArray(font_vertex_attributes);
-			
-			// set font_vertex_buffer as the source of glVertexAttribPointer
-			glBindBuffer(GL_ARRAY_BUFFER, font_vertex_buffer);
-
-			// set up the vertex array object to describe vertices
-			glVertexAttribPointer(
-				font_program.Position_vec4, // attribute
-				3, // size
-				GL_FLOAT, // type
-				GL_FALSE, // normalized QUESTION: what does normalized mean in this case
-				sizeof(Vertex), // stride QUESTION: what does stride do in this case
-				(GLbyte *)0 + 0 // offset
-			);
-			glEnableVertexAttribArray(font_program.Position_vec4);
-			// reminder: it's okay to bind a vec4 to a vec3 attribute, because the fourth 
-			// dimension will automatically get filled in with 1
-
-			glVertexAttribPointer(
-				font_program.Color_vec4, // attribute
-				4, 
-				GL_UNSIGNED_BYTE, // data type
-				GL_TRUE, // normalized
-				sizeof(Vertex), // stride
-				(GLbyte *)0 + 4*3 // offset
-			);
-			glEnableVertexAttribArray(font_program.Color_vec4);
-
-			glVertexAttribPointer(
-				font_program.TexCoord_vec2, // attribute
-				2, // size
-				GL_FLOAT, // type
-				GL_FALSE, // normalized
-				sizeof(Vertex), // stride
-				(GLbyte *)0 + 4*3 + 4*1 // offset
-			);
-			glEnableVertexAttribArray(font_program.TexCoord_vec2);
-
-			// we are now done talking about font_vertex_buffer, so we must unbind it
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-			// we are done setting up the vertex array object, so we must unbind it
-			glBindVertexArray(0);
-
-			GL_ERRORS(); // PARANOIA
-		}
-
-		{ // make a texture using freetype
-
-			// 1) Load font with Freetype
-			// copied from https://github.com/harfbuzz/harfbuzz-tutorial/blob/master/hello-harfbuzz-freetype.c
-			FT_Library ft;
-			if (FT_Init_FreeType(&ft))
-			{
-				std::cout << "ERROR::FREETYPE:: Could not init FreeType Library " << std::endl;
-				exit(0);
-			}
-
-			std::string fontFile = data_path("font/Roboto/Roboto-Medium.ttf");
-			if (FT_New_Face(ft, fontFile.c_str(), 0, &face))
-			{
-				std::cout << "ERROR::FREETYPE: Failed to load font" << std::endl;
-				exit(0);
-			}
-
-			// disable alignment since what we read from the face (font) is gray-scale
-			// this line was copied from https://github.com/ChunanGang/TextBasedGame/blob/main/TextRenderer.cpp
-			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-			FT_Set_Pixel_Sizes(face, 0, 48);
-
-			char LETTER_MIN = 32;
-			char LETTER_MAX = 127;
-			for (char c = LETTER_MIN; c < LETTER_MAX; c++)
-			// 2) load character with FreeType
-			if (FT_Load_Char(face, 'p', FT_LOAD_RENDER))
-			{
-				std::cout << "ERROR::FREETYPE: Failed to load Glyph" << std::endl;
-				exit(0);
-			}
-
-			glGenTextures(1, &test_texture);
-			glBindTexture(GL_TEXTURE_2D, test_texture);
-			// upload font data to the texture
-			glm::uvec2 size = glm::uvec2(face->glyph->bitmap.rows, face->glyph->bitmap.width);
-			// std::vector< glm::u8vec4 > data(size.x*size.y, glm::u8vec4(0xff, 0xff, 0xff, 0xff));
-			std::vector< char > data(size.x*size.y, 0);
-			assert(size.x == face->glyph->bitmap.rows);
-			assert(size.y == face->glyph->bitmap.width);
-			assert(data.size() == size.x*size.y);
-			for (size_t i = 0; i < size.y; i++)
-			{
-				for (size_t j = 0; j < size.x; j++)
-				{
-					size_t index = i * size.y + j;
-					assert(index < data.size());
-					uint8_t val = face->glyph->bitmap.buffer[j * std::abs(face->glyph->bitmap.pitch) + i]; // copied from professor McCan's code example for printing bitmap buffer
-					// data[index].x = val;
-					// data[index].y = 0;
-					// data[index].z = 0;
-					// data[index].w = 255;
-					data[index] = val;	
-				}
-			}
-
-			glTexImage2D(
-				GL_TEXTURE_2D, 
-				0, 
-				GL_RED,
-				size.x, 
-				size.y, 
-				0, 
-				GL_RED, 
-				GL_UNSIGNED_BYTE, 
-				data.data()
-			);
-
-			// set filtering and wrapping parameters
-			// parameters copied from https://github.com/ChunanGang/TextBasedGame/blob/main/TextRenderer.cpp
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		
-			// since the texture uses a mipmap and we haven't created one, tell OpenGL to make one for us
-			glGenerateMipmap(GL_TEXTURE_2D);
-
-			// alright, we've finished uploading the texture, so we can now unbind it
-			glBindTexture(GL_TEXTURE_2D, 0);
-
-			GL_ERRORS(); // PARANOIA
-		}
-	}
 }
 
 PlayMode::~PlayMode() {
@@ -391,10 +254,8 @@ void PlayMode::update(float elapsed) {
 	// send a message of that starts with 'b', and contains button press data and
 	// player location data
 	client.connections.back().send('b');
-	client.connections.back().send(left.downs);
-	client.connections.back().send(right.downs);
-	client.connections.back().send(down.downs);
-	client.connections.back().send(up.downs);
+	client.connections.back().send((uint8_t)num_pies_collected);
+	client.connections.back().send((uint8_t)has_won);
 
 	player_pos = player.transform->position;
 	// send player data to the server
@@ -406,7 +267,6 @@ void PlayMode::update(float elapsed) {
 		client.connections.back().send(_player_pos_data[i]);
 	}
 	
-
 	//reset button press counters:
 	left.downs = 0;
 	right.downs = 0;
@@ -439,7 +299,7 @@ void PlayMode::update(float elapsed) {
 
 				//and consume this part of the buffer:
 				c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + 4 + server_message_size);
-				// std::cout << c->recv_buffer[0] << std::endl;
+				
 				// step 2) interpret data about other players
 				uint32_t other_players_data_size = (
 					(uint32_t(c->recv_buffer[0]) << 16) | (uint32_t(c->recv_buffer[1]) << 8) | (uint32_t(c->recv_buffer[2]))
@@ -447,6 +307,7 @@ void PlayMode::update(float elapsed) {
 				uint8_t other_players_size = c->recv_buffer[3];
 				c->recv_buffer.erase(c->recv_buffer.begin(), c->recv_buffer.begin() + 4);
 				size_t byte_count = 0; // counts the total number of bytes read in other_players_data
+
 				for (size_t i = 0; i < other_players_size; i++) {
 					glm::vec3* oplayer_position = reinterpret_cast<glm::vec3*>(&c->recv_buffer[0]);
 					byte_count += sizeof(glm::vec3);
@@ -454,6 +315,7 @@ void PlayMode::update(float elapsed) {
 					std::string oplayer_name = std::string(c->recv_buffer.begin() + sizeof(glm::vec3), c->recv_buffer.begin() + sizeof(glm::vec3) + oplayer_namesize);
 					byte_count += oplayer_name.size();
 					assert(oplayer_name.size() == oplayer_namesize);
+
 					// if the other player is not in the other_players_data map, add them, and 
 					// then set their data
 					auto opd = other_players_data.find(oplayer_name);
@@ -466,9 +328,7 @@ void PlayMode::update(float elapsed) {
 						other_player->pipeline = other_player_base;
 						OtherPlayersData oplayer_data = OtherPlayersData(*oplayer_position);
 						oplayer_data.drawable = other_player;
-						other_players_data.insert(std::pair<std::string, OtherPlayersData>(oplayer_name, oplayer_data));
-						std::cout << "Pushed other player base to scene.drawables" << std::endl;
-					
+						other_players_data.insert(std::pair<std::string, OtherPlayersData>(oplayer_name, oplayer_data));					
 					} else {
 						opd->second.position = *oplayer_position;
 						std::cout << opd->first << ": " << to_string(opd->second.position) << std::endl;
@@ -482,6 +342,28 @@ void PlayMode::update(float elapsed) {
 			}
 		}
 	}, 0.0);
+
+	{ // if the player collides with a  pie, remove it from the list of drawables and add score
+		for (auto p : pies) {
+			auto distance = [](glm::vec3 v1, glm::vec3 v2) {
+				return sqrt(
+					pow(v1.x - v2.x, 2) +
+					pow(v1.y - v2.y, 2) +
+					pow(v1.z - v2.z, 2) 
+				);
+			};
+			float min_collection_dist = 1.0f;
+			if (distance(player_pos, p.transform->position) < min_collection_dist) {
+				num_pies_collected++;
+				p.transform->position.y += 100000; // move the pie really far away so it 
+				// appears like it has been removed from the drawables
+			}
+		}
+	}
+	// if you collect all the pies then you win the game
+	if (num_pies_collected >= num_pies_total) {
+		has_won = true; // has_won gets sent to the server
+	}
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {
@@ -533,77 +415,6 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		draw_text(glm::vec2(-aspect + 0.1f,-0.9f), "Use WASD to move around, walk toward a pie to collect it. Whoever collects the most pies wins!", 0.09f);
 		
 	}
-
-	/*
-	{ // Use freetype and harfbuzz to draw fancier text
-		 
-		// compute window aspect ratio
-		float aspect = drawable_size.x / float(drawable_size.y);
-
-		glm::vec2 center = drawable_size;
-		center.x *= 0.5f;
-		center.y *= 0.5f;
-
-		// create a matrix that scales and translates correctly
-		// TODO: double check that this is actually correct
-		glm::mat4 court_to_clip = glm::mat4(
-			glm::vec4(aspect, 0.0f, 0.0f, 0.0f),
-			glm::vec4(0.0f, aspect, 0.0f, 0.0f), 
-			glm::vec4(0.0f, 0.0f, 1.0f, 0.0f),
-			glm::vec4(-center.x * aspect, -center.y * aspect, 0.0f, 1.0f)
-		);
-
-		std::vector <Vertex> vertices;
-		vertices.clear();
-		draw_rectangle(vertices, glm::vec2(drawable_size.x * 0.5f, drawable_size.y * 0.5f), glm::vec2(0.1, 0.1), glm::u8vec4(0xff, 0xff, 0xff, 0xff));
-
-		// use alpha blending
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		// do not use the depth test
-		// QUESTION: what is the GL depth test?
-		glDisable(GL_DEPTH_TEST);
-
-		// upload vertices to font_vertex buffer
-		glBindBuffer(GL_ARRAY_BUFFER, font_vertex_buffer); // set font_vertex_buffer as the current vertex buffer
-		glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vertices[0]), vertices.data(), GL_DYNAMIC_DRAW); // upload data to the vertex buffer
-		glBindBuffer(GL_ARRAY_BUFFER, 0); // now that we are done with the buffer, unbind it
-
-		// set font program as the current program
-		glUseProgram(font_program.program);
-
-		// upload OBJECT_TO_CLIP to the proper uniform location
-		// glm::mat4 identity(
-		// 	glm::vec4(1.0f, 0.0f, 0.0f, 0.0f),
-		// 	glm::vec4(0.0f, 1.0f, 0.0f, 0.0f),
-		// 	glm::vec4(0.0f, 0.0f, 1.0f, 0.0f),
-		// 	glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
-		// );
-		
-		glUniformMatrix4fv(font_program.OBJECT_TO_CLIP_mat4, 1, GL_FALSE, glm::value_ptr(court_to_clip));
-		// QUESTION: what does the 4fv in 'ulUniformMatrix4fv' mean?
-
-		// use the mapping font_vertex_attrivures ot fetch vertex data
-		glBindVertexArray(font_vertex_attributes); // QUESTION: what is this line acutally doing?
-
-		// bind the text texture to location zero 
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, test_texture);
-
-		// run the OpenGL pipeline
-		glDrawArrays(GL_TRIANGLES, 0, GLsizei(vertices.size()));
-
-		// unbind the test texture
-		glBindTexture(GL_TEXTURE_2D, 0);
-
-		// reset the vertex array to none
-		glBindVertexArray(0);
-
-		// reset current program to none
-		glUseProgram(0);
-
-	}
-	*/
 
 	GL_ERRORS();
 }
