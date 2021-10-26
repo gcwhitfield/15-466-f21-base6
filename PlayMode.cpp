@@ -315,7 +315,7 @@ void PlayMode::update(float elapsed) {
 	// player walking 
 	{
 		// combine inputs into a move;
-		constexpr float PlayerSpeed = 3.0f;
+		constexpr float PlayerSpeed = 9.0f;
 		glm::vec2 move = glm::vec2(0.0f);
 		if (left.pressed && !right.pressed) move.x = -1.0f;
 		if (!left.pressed && right.pressed) move.x = 1.0f;
@@ -387,26 +387,25 @@ void PlayMode::update(float elapsed) {
 		}
   	}
 
-	//queue data for sending to server:
-	//TODO: send something that makes sense for your game
-	if (left.downs || right.downs || down.downs || up.downs) {
-		//send a five-byte message of type 'b':
-		client.connections.back().send('b');
-		client.connections.back().send(left.downs);
-		client.connections.back().send(right.downs);
-		client.connections.back().send(down.downs);
-		client.connections.back().send(up.downs);
+	// queue data for sending to server:
+	// send a message of that starts with 'b', and contains button press data and
+	// player location data
+	client.connections.back().send('b');
+	client.connections.back().send(left.downs);
+	client.connections.back().send(right.downs);
+	client.connections.back().send(down.downs);
+	client.connections.back().send(up.downs);
 
-		player_pos = player.transform->position;
-		// send player data to the server
-		std::vector<char>player_pos_data;
-		char* _player_pos_data = reinterpret_cast<char*>(&player_pos);
-		size_t n = sizeof(player_pos) / sizeof(char);
-		for (size_t i = 0; i < n; i++)
-		{
-			client.connections.back().send(_player_pos_data[i]);
-		}
+	player_pos = player.transform->position;
+	// send player data to the server
+	std::vector<char>player_pos_data;
+	char* _player_pos_data = reinterpret_cast<char*>(&player_pos);
+	size_t n = sizeof(player_pos) / sizeof(char);
+	for (size_t i = 0; i < n; i++)
+	{
+		client.connections.back().send(_player_pos_data[i]);
 	}
+	
 
 	//reset button press counters:
 	left.downs = 0;
@@ -531,13 +530,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 
 		draw_text(glm::vec2(-aspect + 0.1f, 0.0f), server_message, 0.09f);
 
-		draw_text(glm::vec2(-aspect + 0.1f,-0.9f), "(press WASD to change your total)", 0.09f);
-
-		draw_text(player_pos, "ME!", 0.09f);
-
-		for (auto oplayer : other_players_data) {
-			draw_text(oplayer.second.position, oplayer.first, 0.09f);
-		}
+		draw_text(glm::vec2(-aspect + 0.1f,-0.9f), "Use WASD to move around, walk toward a pie to collect it. Whoever collects the most pies wins!", 0.09f);
 		
 	}
 
